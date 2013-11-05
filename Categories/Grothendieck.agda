@@ -7,13 +7,14 @@ open import Data.Product using (Σ; _,_; proj₁; proj₂; _×_)
 open import Categories.Support.Experimental
 open import Categories.Support.PropositionalEquality
 open import Categories.Support.IProduct
+open import Categories.NaturalTransformation using (NaturalTransformation; module NaturalTransformation)
 import Categories.Category as CCat
 open CCat hiding (module Heterogeneous)
-open import Categories.Functor using (Functor; module Functor; ≡⇒≣)
+import Categories.Functor as Cat
+open Cat using (Functor; module Functor; ≡⇒≣)
 open import Categories.Agda
 open import Categories.Categories
 open import Categories.Congruence
-
 
 -- TODO: don't use sigmas
 -- Break into modules Strict and Weak using Sets and Setoids?
@@ -64,7 +65,6 @@ Dom {C = C} F = record {
   where
    open Category C
 
-
 Grothendieck : ∀ {o ℓ e o′ ℓ′ e′} {C : Category o ℓ e} → Functor C (Categories o′ ℓ′ e′) → Category _ _ _
 Grothendieck {o′ = o′} {ℓ′} {e′} {C = C} F = record 
   { Obj = Obj′
@@ -88,7 +88,7 @@ Grothendieck {o′ = o′} {ℓ′} {e′} {C = C} F = record
     open Equiv public
   open Category C
   open Equiv
-  module Cat = Category (Categories o′ ℓ′ e′)
+--  module Cat = Category (Categories o′ ℓ′ e′)
   module Cong {c} where
    open Congruence (TrivialCongruence (F₀ c)) public
   open Cong public using () renaming (coerce to coe) 
@@ -113,7 +113,7 @@ Grothendieck {o′ = o′} {ℓ′} {e′} {C = C} F = record
   _∘′_ : ∀ {X Y Z} → Hom′ Y Z → Hom′ X Y → Hom′ X Z
   _∘′_ {cx , xx} {Y} {cz , xz} (f , α) (g , β) = (f ∘ g) , α Fc.∘ Cong.coerce (∘-eq f g) ≣-refl (Functor.F₁ (F₁ f) β)
 
-  id-eq : ∀ {c x} -> Functor.F₀ (Cat.id {F₀ c}) x ≣ Functor.F₀ (F₁ id) x
+  id-eq : ∀ {c x} -> Functor.F₀ (Cat.id {C = F₀ c}) x ≣ Functor.F₀ (F₁ id) x
   id-eq {c} {x} = ≣-relevant (≣-sym (≡⇒≣ (F₁ id) Cat.id (identity {c}) x))
 
   id′ : {A : Obj′} → Hom′ A A
@@ -210,10 +210,13 @@ Grothendieck {o′ = o′} {ℓ′} {e′} {C = C} F = record
    where
     open Het.HetReasoning
 
-Gr = Grothendieck
+open import Categories.FunctorCategory
 
-DomGr : ∀ {o ℓ e o′ ℓ′ e′} {C : Category o ℓ e} → (F : Functor C (Categories o′ ℓ′ e′)) → Functor (Grothendieck F) C
-DomGr {C = C} F = record {
+module _ where
+ Gr = Grothendieck
+
+ DomGr : ∀ {o ℓ e o′ ℓ′ e′} {C : Category o ℓ e} → (F : Functor C (Categories o′ ℓ′ e′)) → Functor (Gr F) C
+ DomGr {C = C} F = record {
                     F₀ = proj₁;
                     F₁ = proj₁;
                     identity = C.Equiv.refl;
@@ -222,11 +225,11 @@ DomGr {C = C} F = record {
   where 
     module C = Category C
 
-inGr : ∀ {o ℓ e o′ ℓ′ e′} {C : Category o ℓ e} (F : Functor C (Categories o′ ℓ′ e′)) → ∀ c -> Functor (Functor.F₀ F c) (Gr F)
-inGr {C = C} F c = record {
+ inGr : ∀ {o ℓ e o′ ℓ′ e′} {C : Category o ℓ e} (F : Functor C (Categories o′ ℓ′ e′)) → ∀ c -> Functor (Functor.F₀ F c) (Gr F)
+ inGr {C = C} F c = record {
                      F₀ = _,_ c;
                      F₁ = λ f → C.id , GrF.coe GrF.id-eq ≣-refl f;
-                     identity = Category.Equiv.refl (Grothendieck F);
+                     identity = Category.Equiv.refl (Gr F);
                      homomorphism = C.Equiv.sym C.identityʳ , Het.trans (Het.sym (Het.coerce-resp-∼ GrF.id-eq ≣-refl))
                                                                 (Het.∘-resp-∼ (Het.coerce-resp-∼ GrF.id-eq ≣-refl)
                                                                  (Het.trans
@@ -240,3 +243,33 @@ inGr {C = C} F c = record {
     module F = Functor F
     module GrF = Groth F
     open GrF using (module Het; module Cong)
+
+ inGr-nat : ∀ {o ℓ e o′ ℓ′ e′} {C : Category o ℓ e} (F : Functor C (Categories o′ ℓ′ e′)) → 
+           ∀ {c′ c} (f : C [ c′ , c ]) -> NaturalTransformation (inGr F c′) (inGr F c Cat.∘ Functor.F₁ F f)
+ inGr-nat {C = C} F {c′} {c} f = record 
+    { η = λ X → f , Category.id (F.F₀ c)
+    ; commute = TODO
+    }
+  where
+    module F = Functor F
+    module C = Category C
+    postulate TODO : ∀ {A} -> A
+  
+ GrF : ∀ {o ℓ e o′ ℓ′ e′} {C : Category o ℓ e} → Functor (Functors C (Categories o′ ℓ′ e′)) (Categories _ _ _)
+ GrF {C = C} = record 
+   { F₀ = Gr
+   ; F₁ = λ {A} {B} η → let module η = NaturalTransformation η in record 
+     { F₀ = (λ {(c , Ac) → c , Functor.F₀ (η.η c) Ac})
+     ; F₁ = λ { {x , Ax} {y , Ay} (f , φ) → f , ≣-subst₂ (Category._⇒_ (Functor.F₀ B y)) TODO ≣-refl (Functor.F₁ (η.η y) φ)}
+     ; identity = TODO
+     ; homomorphism = TODO
+     ; F-resp-≡ = TODO
+     }
+   ; identity = TODO
+   ; homomorphism = TODO
+   ; F-resp-≡ = TODO
+   }
+  where
+    module C = Category C
+    postulate TODO : ∀ {l}{A : Set l} -> A
+ 
